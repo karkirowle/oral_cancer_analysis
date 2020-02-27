@@ -14,7 +14,8 @@ np.random.seed(0)
 
 def gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,ltas,delta_delta):
 
-    gmm_dir = "/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/gmm/"
+    gmm_dir = "gmm_checkpoints/"
+    #gmm_dir = "/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/gmm/"
 
     if train:
 
