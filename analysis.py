@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import joblib
 import numpy as np
+import pandas as pd
 
 
 from preprocessing import FileSourceDataset, LibrosaSpectrogramSource, LogspecLoader, LabelDataSource, KaldiSource, KaldiLabelDataSource
@@ -20,6 +21,89 @@ import tensorflow as tf
 import keras.backend as K
 
 
+def confusion_dnn(calculate):
+    if calculate:
+        config = tf.ConfigProto(allow_soft_placement=True,
+                                log_device_placement=False)
+        config.gpu_options.allow_growth = False
+        config.gpu_options.per_process_gpu_memory_fraction = 0.8
+        sess = tf.Session(graph=tf.get_default_graph(),
+                          config=config)
+        K.set_session(sess)
+        learning_rate = 0.001
+        pad_len = 4000
+        resnet = model.resnet.ResNet_Logspec(pad_len, 257)
+
+        optimiser = optimizers.Adam(lr=learning_rate)
+        resnet.trainer.compile(optimiser, loss='categorical_crossentropy',
+                               weighted_metrics=["accuracy"],
+                               metrics=['accuracy'],
+                               sample_weight_mode="None")
+
+        experiment = "masked_100_frames_50_earlystopped_3"
+        resnet.trainer.load_weights("checkpoints/" + experiment + ".hd5")
+
+        test_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/test_spec_vad/feats.scp"
+
+        cancer_list =  ["id001", "id005", "id012","id013","id006","id008"]
+        healthy_list = ["id010013","id10094","id10110","id10509","id10855","id11217"]
+
+        print("Test set")
+        for speaker in cancer_list:
+            test_acoustic_source = KaldiSource(test_ROOT, subset=speaker, transpose=False)
+            test_acoustic = PaddedFileSourceDataset(test_acoustic_source, pad_len)
+            test_label = np.zeros((len(test_acoustic),2))
+            test_label[:,1] = 1
+            shuffle = False
+            batch_size = 1
+            val_gen = LogspecLoader(test_acoustic, test_label, shuffle, batch_size)
+
+            results = resnet.trainer.evaluate_generator(val_gen)
+            print(speaker,end="\t")
+            print(results[1])
+        for speaker in healthy_list:
+            test_acoustic_source = KaldiSource(test_ROOT, subset=speaker, transpose=False)
+            test_acoustic = PaddedFileSourceDataset(test_acoustic_source, pad_len)
+            test_label = np.zeros((len(test_acoustic),2))
+            test_label[:,0] = 1
+            shuffle = False
+            batch_size = 1
+            val_gen = LogspecLoader(test_acoustic, test_label, shuffle, batch_size)
+
+            results = resnet.trainer.evaluate_generator(val_gen)
+            print(speaker, end="\t")
+            print(results[1])
+
+        train_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_spec_vad/feats.scp"
+
+        cancer_list = ["id002", "id003", "id004", "id007", "id011"]
+        healthy_list = ["id10078","id100111", "id10242", "id10571", "id11250"]
+
+        print("Train set")
+        for speaker in cancer_list:
+            test_acoustic_source = KaldiSource(train_ROOT, subset=speaker, transpose=False)
+            test_acoustic = PaddedFileSourceDataset(test_acoustic_source, pad_len)
+            test_label = np.zeros((len(test_acoustic),2))
+            test_label[:,1] = 1
+            shuffle = False
+            batch_size = 1
+            val_gen = LogspecLoader(test_acoustic, test_label, shuffle, batch_size)
+
+            results = resnet.trainer.evaluate_generator(val_gen)
+            print(speaker, end="\t")
+            print(results[1])
+        for speaker in healthy_list:
+            test_acoustic_source = KaldiSource(train_ROOT, subset=speaker, transpose=False)
+            test_acoustic = PaddedFileSourceDataset(test_acoustic_source, pad_len)
+            test_label = np.zeros((len(test_acoustic),2))
+            test_label[:,0] = 1
+            shuffle = False
+            batch_size = 1
+            val_gen = LogspecLoader(test_acoustic, test_label, shuffle, batch_size)
+
+            results = resnet.trainer.evaluate_generator(val_gen)
+            print(speaker, end="\t")
+            print(results[1])
 def phonet_gmm_figure(model_cancer, model_control):
     font = {'family': 'normal',
             'size': 22}
@@ -38,24 +122,86 @@ def phonet_gmm_figure(model_cancer, model_control):
     ax = plt.subplot(111)
 
     cats = ["vocalic", "consonantal", "back", "anterior", "open", "close", "nasal", "stop", "continuant", "lateral",
-     "flap", "trill", "voice", "strident", "labial", "dental", "velar", "pause"]
+     "flap", "trill", "voice", "strident", "labial", "dental", "velar"]
 
+    meandiff, cats = (list(t) for t in zip(*sorted(zip(meandiff, cats))))
+    meandiff = np.array(meandiff)
     color = np.array(list("r" * len(cats)))
     print(color.shape)
     color_binary = meandiff > 0
     color[color_binary] = "r"
     color[~color_binary] = "b"
-    ax.grid(b=True,color="black",axis="y")
+    ax.grid(b=True,color="black",axis="x")
     ax.set_axisbelow(b=True)
-    ax.bar(cats, meandiff, width=1, color=list(color),linewidth=1,edgecolor="black")
-    ax.bar(cats,proxy)
+    ax.barh(cats, width=meandiff, height=1, color=list(color),linewidth=1,edgecolor="black")
+    ax.barh(cats,proxy)
+    ax.text(0.002, -0.2, "/p/, /b/, /t/, /k/, /g/, /tS/, /d/", fontsize=22)
+    ax.text(-0.018, 15.8, "/m/, /n/", fontsize=22)
+
+    #plt.xlim([-1, 1])
     plt.xticks(rotation=50)
     plt.ylabel("mean difference of GMM bins")
     plt.legend(["more cancer like","more control like"])
     leg = ax.get_legend()
     leg.legendHandles[0].set_color('red')
     leg.legendHandles[1].set_color('blue')
+    #plt.show()
     plt.savefig("figures/ppg_gmm_barplot.png")
+
+def asr_gmm_figure(model_cancer, model_control):
+    font = {'family': 'normal',
+            'size': 22}
+
+    matplotlib.rc('font', **font)
+
+    cancer_gmm = joblib.load(model_cancer)
+    control_gmm = joblib.load(model_control)
+
+    meandiff = np.mean(cancer_gmm.means_.T - control_gmm.means_.T,axis=1)
+    #proxy = np.zeros_like(meandiff)
+    print(meandiff.shape)
+    print(meandiff)
+
+    fig = plt.figure(num=None, figsize=(15, 12), dpi=80, facecolor='w', edgecolor='k')
+    ax = plt.subplot(111)
+
+    #cats = [str(i) for i in range(39)]
+
+    cats = pd.read_csv("fac_via_ppg/test/data/phoneme_table", delimiter="\t", header=None, names=["a","b"])
+    cats = cats["a"]
+    print(cats)
+    cats = cats[:-1]
+    print(cats.shape)
+    print(meandiff.shape)
+    idx = np.abs(meandiff) > 0.005
+    print(idx.shape)
+    cats = cats[idx]
+    meandiff = meandiff[idx]
+
+    meandiff, cats = (list(t) for t in zip(*sorted(zip(meandiff, cats))))
+    meandiff = np.array(meandiff)
+    color = np.array(list("r" * len(cats)))
+    print(color.shape)
+    color_binary = meandiff > 0
+    color[color_binary] = "r"
+    color[~color_binary] = "b"
+    ax.grid(b=True,color="black",axis="x")
+    ax.set_axisbelow(b=True)
+    ax.barh(cats, width=meandiff, height=1, color=list(color),linewidth=1,edgecolor="black")
+    proxy = np.zeros_like(meandiff)
+    ax.barh(cats,proxy)
+    #ax.text(0.002, -0.2, "/p/, /b/, /t/, /k/, /g/, /tS/, /d/", fontsize=22)
+    #ax.text(-0.018, 15.8, "/m/, /n/", fontsize=22)
+
+    #plt.xlim([-1, 1])
+    plt.xticks(rotation=50)
+    plt.ylabel("mean difference of GMM bins")
+    plt.legend(["more cancer like","more control like"])
+    leg = ax.get_legend()
+    leg.legendHandles[0].set_color('red')
+    leg.legendHandles[1].set_color('blue')
+    #plt.show()
+    plt.savefig("figures/ppg_gmm_barplot_2.png")
 
 def mean_gradcam(calculate=False):
 
@@ -128,14 +274,17 @@ def mean_gradcam(calculate=False):
                                   seed_input=output)
 
                 healthy_grads = healthy_grads + cam
-                #stacked_grads[i,:] = np.ravel(cam)
-
+                #stacked_grads[i,:] = np.ravel(cam
+                plt.imshow(np.transpose(cam[:1000,:,:],[1,0,2]),aspect="auto")
+                plt.show()
                 num_healthy = num_healthy + 1
             else:
                 cam = visualize_cam(resnet.trainer, layer_idx, filter_indices=1,
                                   seed_input=output)
 
                 cancer_grads = cancer_grads + cam
+                plt.imshow(cam)
+                plt.show()
                 #stacked_grads[i,:] = np.ravel(cam)
 
                 num_cancer = num_cancer + 1
@@ -150,8 +299,8 @@ def mean_gradcam(calculate=False):
         cancer_grads = cancer_grads / num_cancer
 
 
-        np.save("healthy.npy", healthy_grads)
-        np.save("cancer.npy",cancer_grads)
+        np.save("healthy_2.npy", healthy_grads)
+        np.save("cancer_2.npy",cancer_grads)
 
     healthy_grads = np.load("healthy.npy")
     cancer_grads = np.load("cancer.npy")
@@ -197,7 +346,8 @@ def fancy_spectrogram(spectrogram,title):
 
 
 if __name__ == '__main__':
-    #phonet_gmm_figure("/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/gmm/gmm_ppg_30sec_12_components_cancer.pkl",
-    #                  "/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/gmm/gmm_ppg_30sec_12_components_healthy.pkl")
-    mean_gradcam()
+    #confusion_dnn(calculate=True)
+    asr_gmm_figure("gmm_checkpoints/gmm_ppg_30sec_16_components_cancer.pkl",
+                      "gmm_checkpoints/gmm_ppg_30sec_16_components_healthy.pkl")
+    #mean_gradcam(calculate=True)
 

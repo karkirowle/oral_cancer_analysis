@@ -12,7 +12,7 @@ from tqdm import tqdm
 from os.path import join,splitext,basename,split
 import os
 import keras
-from phonet import Phonet as phon
+#from phonet import Phonet as phon
 import kaldi_io as ko
 import adv_kaldi_io as ako
 import librosa
@@ -34,11 +34,16 @@ class KaldiSource(FileDataSource):
 
     def collect_files(self):
 
+        global_speaker_list = ["id011","id002","id003","id004","id007","id012","id013","id001","id005","id006","id008",
+                               "id10242", "id10571", "id10078", "id10111", "id11250", "id10094", "id11217", "id10509",
+                               "id10110","id10013", "id10855"]
         if self.subset == "cancer":
             speaker_list = ["id011","id002","id003","id004","id007","id012","id013","id001","id005","id006","id008"]
         elif self.subset == "healthy":
             speaker_list = ["id10242","id10571","id10078","id10111","id11250","id10094","id11217","id10509","id10110",
             "id10013","id10855"]
+        elif self.subset in global_speaker_list:
+            speaker_list = [self.subset]
         else:
             return self.key_list
 
@@ -152,11 +157,33 @@ class MFCCSource(FileDataSource):
         mfcc = librosa.feature.mfcc(x)
         return mfcc.astype(np.float32)
 
-class PhonSource(MFCCSource):
+# class PhonSource(MFCCSource):
+#     def __init__(self,data_root,max_files=None):
+#         #pass
+#         self.phone_instance = phon(["vocalic", "consonantal", "back", "anterior", "open", "close", "nasal", "stop", "continuant", "lateral",
+#                                "flap", "trill", "voice", "strident", "labial", "dental", "velar", "pause"])
+#         super().__init__(data_root,max_files)
+#
+#     def collect_files(self):
+#         #pass
+#         return super().collect_files()
+#
+#     def collect_features(self, wav_path,label_path):
+#         try:
+#             phon2 = self.phone_instance.get_posteriorgram(wav_path)
+#         except:
+#             print("Failed feature extraction due to short utterance in file", print(wav_path))
+#             phon2 = np.zeros((18,1))
+#         return phon2
+
+import sys
+sys.path.insert(0,'/home/boomkin/PycharmProjects/oral_cancer_analysis/fac_via_ppg/src')
+import fac_via_ppg.src.ppg as ppg
+import fac_via_ppg.src.common.feat as feat
+
+class PhonSource2(MFCCSource):
     def __init__(self,data_root,max_files=None):
         #pass
-        self.phone_instance = phon(["vocalic", "consonantal", "back", "anterior", "open", "close", "nasal", "stop", "continuant", "lateral",
-                               "flap", "trill", "voice", "strident", "labial", "dental", "velar", "pause"])
         super().__init__(data_root,max_files)
 
     def collect_files(self):
@@ -164,12 +191,11 @@ class PhonSource(MFCCSource):
         return super().collect_files()
 
     def collect_features(self, wav_path,label_path):
-        try:
-            phon2 = self.phone_instance.get_posteriorgram(wav_path)
-        except:
-            print("Failed feature extraction due to short utterance in file", print(wav_path))
-            phon2 = np.zeros((18,1))
-        return phon2
+        deps = ppg.DependenciesPPG()
+        wave_data = feat.read_wav_kaldi(wav_path)
+        ppgs = ppg.compute_monophone_ppg(wave_data, deps.nnet, deps.lda,
+                                         deps.monophone_trans)
+        return ppgs
 
 class LabelDataSource(MFCCSource):
     def __init__(self,data_root,max_files=None):
@@ -277,11 +303,11 @@ class NPYDataSource(FileDataSource):
         return np.load(path)
 
 class NPYDataSource2(FileDataSource):
-    def __init__(self, data_root, subset, max_files=None):
+    def __init__(self, data_root, subset, max_files=None, transpose=False):
         self.data_root = data_root
         self.subset = subset
         self.max_files = max_files
-
+        self.transpose = transpose
     def collect_files(self):
 
         self.file_list = glob(join(self.data_root,"*.npy"))
@@ -303,10 +329,37 @@ class NPYDataSource2(FileDataSource):
     def collect_features(self, path):
 
         feat = np.nan_to_num(np.load(path))
-
+        if self.transpose:
+            feat = np.transpose(feat)
         return feat
 
+def combine_stack_and_label(filesource_dataset_1,filesource_dataset_2,num_sample):
+    """
+    Stacks two datasets (healthy and cancer) and creates the label for them to be suitable
+    for 2-class classification problems
 
+    :param filesource_dataset_1:
+    :param filesource_dataset_2:
+    :return:
+    """
+
+    x = filesource_dataset_1[0]
+    x_utterances = len(filesource_dataset_1)
+    for idx in tqdm(range(1, x_utterances)):
+        x = np.hstack((x, filesource_dataset_1[idx]))
+        #print(x.shape)
+    y = filesource_dataset_2[0]
+    y_utterances = len(filesource_dataset_2)
+    for idx in tqdm(range(1, y_utterances)):
+        y = np.hstack((y, filesource_dataset_2[idx]))
+    X = np.hstack((x,y))
+    Y = np.hstack((np.ones((x.shape[1])),np.zeros((y.shape[1]))))
+
+    if (X.shape[1] > num_sample):
+        idx = np.random.choice(X.shape[1], num_sample)
+        X = X[:, idx]
+        Y = Y[idx]
+    return X, Y
 
 class LogspecLoader(keras.utils.Sequence):
     def __init__(self, file_source,label_source,shuffle,batch_size):
@@ -404,18 +457,35 @@ if __name__ == '__main__':
     # print(len(train_acoustic))
     #
 
-    htk_dir = "/home/boomkin/repos/kaldi/egs/cancer_30/opensmile/train"
-    test_acoustic_source = HTKSource(htk_dir,subset="healthy")
-    test_acoustic = FileSourceDataset(test_acoustic_source)
+    root_dir = "/home/boomkin/repos/kaldi/egs/cancer_30"
+    ppg_dir = "/home/boomkin/repos/kaldi/egs/cancer_30/audio/train"
+    train_acoustic_source = PhonSource2(ppg_dir)
+    train_acoustic = FileSourceDataset(train_acoustic_source)
     import matplotlib.pyplot as plt
-    for idx in tqdm(range(len(test_acoustic))):
-         x = test_acoustic[idx]
+    for idx in tqdm(range(len(train_acoustic))):
+          x = train_acoustic[idx]
 
-         #plt.imshow(x, aspect="auto")
-         #plt.show()
-         name = splitext(basename(test_acoustic.collected_files[idx][0]))[0]
-         speaker = split(split(test_acoustic.collected_files[idx][0])[0])[1]
+          name = splitext(basename(train_acoustic.collected_files[idx][0]))[0]
+          speaker = split(split(train_acoustic.collected_files[idx][0])[0])[1]
+          xpath = join(root_dir, "data", "train_ppg_asr", speaker + "_" + name + ".npy")
+          np.save(xpath, x)
 
+    root_dir = "/home/boomkin/repos/kaldi/egs/cancer_30"
+    ppg_dir = "/home/boomkin/repos/kaldi/egs/cancer_30/audio/test"
+    train_acoustic_source = PhonSource2(ppg_dir)
+    train_acoustic = FileSourceDataset(train_acoustic_source)
+    import matplotlib.pyplot as plt
+    for idx in tqdm(range(len(train_acoustic))):
+          x = train_acoustic[idx]
+
+          name = splitext(basename(train_acoustic.collected_files[idx][0]))[0]
+          speaker = split(split(train_acoustic.collected_files[idx][0])[0])[1]
+          xpath = join(root_dir, "data", "test_ppg_asr", speaker + "_" + name + ".npy")
+          np.save(xpath, x)
+
+    #      name = splitext(basename(test_acoustic.collected_files[idx][0]))[0]
+    #      speaker = split(split(test_acoustic.collected_files[idx][0])[0])[1]
+    #
 
 
     # root_dir = "/home/boomkin/repos/kaldi/egs/cancer_30/"

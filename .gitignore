@@ -1,8 +1,11 @@
 __pycache__/
 model/
+gmm_checkpoints/
+svm_checkpoints/
 checkpoints/
 venv
 .idea/
 logs/
 phonet/
 something/
+*.csv

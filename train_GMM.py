@@ -115,19 +115,22 @@ def gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,l
     #plt.show()
 
 
-def gmm_ppg_script(experiment,gmm_comps,train):
-    DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_ppg/"
-    gmm_dir = "/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/gmm/"
+def gmm_ppg_script(experiment,gmm_comps,train,no_pause):
+
+    DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_ppg_asr"
+    #DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_ppg/"
+    gmm_dir = "gmm_checkpoints/"
     #experiment = "gmm_ppg_debug"
     #train = False
 
     if train:
-        cancer_train_source = NPYDataSource2(DATA_ROOT, subset="cancer")
+        cancer_train_source = NPYDataSource2(DATA_ROOT, subset="cancer",transpose=True)
         cancer_train = FileSourceDataset(cancer_train_source)
-        healthy_train_source = NPYDataSource2(DATA_ROOT, subset="healthy")
+        healthy_train_source = NPYDataSource2(DATA_ROOT, subset="healthy",transpose=True)
         healthy_train = FileSourceDataset(healthy_train_source)
         #print("Acoustic linguistic feature dim", cancer_train[0].shape[-1])
         #print(len(cancer_train))
+
 
         x = cancer_train[0]
         for idx in tqdm(range(1, len(cancer_train))):
@@ -139,6 +142,8 @@ def gmm_ppg_script(experiment,gmm_comps,train):
             idx = np.random.choice(x.shape[1],num_sample)
             x = x[:,idx]
 
+        if no_pause:
+            x = x[:-1,:]
         gmm_cancer = GaussianMixture(n_components=gmm_comps, covariance_type="diag")
         gmm_cancer.fit(x.T)
 
@@ -153,6 +158,8 @@ def gmm_ppg_script(experiment,gmm_comps,train):
             idx = np.random.choice(y.shape[1], num_sample)
             y = y[:, idx]
 
+        if no_pause:
+            y = y[:-1, :]
         gmm_healthy = GaussianMixture(n_components=gmm_comps, covariance_type="diag")
         gmm_healthy.fit(y.T)
         gmmpath = os.path.join(gmm_dir, experiment + "_healthy.pkl")
@@ -164,11 +171,13 @@ def gmm_ppg_script(experiment,gmm_comps,train):
         gmm_cancer = joblib.load(gmmpath)
 
     # EVAL GMM
-    DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/test_ppg/"
+    #DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_ppg_2"
 
-    cancer_test_source = NPYDataSource2(DATA_ROOT, subset="cancer")
+    DATA_ROOT = "/home/boomkin/repos/kaldi/egs/cancer_30/data/test_ppg_asr/"
+
+    cancer_test_source = NPYDataSource2(DATA_ROOT, subset="cancer",transpose=True)
     cancer_test = FileSourceDataset(cancer_test_source)
-    healthy_test_source = NPYDataSource2(DATA_ROOT, subset="healthy")
+    healthy_test_source = NPYDataSource2(DATA_ROOT, subset="healthy",transpose=True)
     healthy_test = FileSourceDataset(healthy_test_source)
 
     all_prediction = len(cancer_test) + len(healthy_test)
@@ -177,14 +186,19 @@ def gmm_ppg_script(experiment,gmm_comps,train):
     cancer_scores = []
     healthy_scores = []
     for idx in tqdm(range(len(cancer_test))):
-        x = cancer_test[idx].T
+        x = cancer_test[idx]
+        if no_pause:
+            x = x[:-1].T
+
         score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
         cancer_scores.append(score)
         #if score > 0:
             #print(cancer_test.collected_files[idx])
         right += score < 0
     for idx in tqdm(range(len(healthy_test))):
-        x = healthy_test[idx].T
+        x = healthy_test[idx]
+        if no_pause:
+            x = x[:-1].T
         score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
         healthy_scores.append(score)
         #if score < 0:
@@ -304,6 +318,7 @@ if __name__ == '__main__':
     p.add("--ltas", action="store_true", help='Prosodic features')
     p.add("--ppg", action="store_true", help='PPG-based features')
     p.add("--delta", action="store_true", help="Delta-delta features for MFCC and PLP")
+    p.add("--no_pause", action="store_true", help="Omitting pause features from linguistic feat analysis")
 
     args = p.parse_args()
 
@@ -316,6 +331,7 @@ if __name__ == '__main__':
     ltas = args.ltas
     ppg = args.ppg
     delta_delta = args.delta
+    no_pause = args.no_pause
     #train_scp_file = "/home/boomkin/repos/kaldi/egs/cancer_30/data/train_spec_vad/feats.scp"
     #test_scp_file = "/home/boomkin/repos/kaldi/egs/cancer_30/data/test_spec_vad/feats.scp"
     #train = False
@@ -323,6 +339,6 @@ if __name__ == '__main__':
     #gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,ltas)
 
     if ppg:
-        gmm_ppg_script(experiment,gmm_comps,train)
+        gmm_ppg_script(experiment,gmm_comps,train,no_pause)
     else:
         gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,ltas,delta_delta)
