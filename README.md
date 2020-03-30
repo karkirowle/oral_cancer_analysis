@@ -1,5 +1,10 @@
 # Towards taming oral cancer speech in the wild
 
+
+
+[![DOI](https://zenodo.org/badge/243517361.svg)](https://zenodo.org/badge/latestdoi/243517361)
+
+
 ### Description
 This git repository contains the training and analysis code used in our paper. 
 The training script for the neural network is not included.
