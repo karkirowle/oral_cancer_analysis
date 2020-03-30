@@ -20,7 +20,43 @@ from keras import optimizers
 import tensorflow as tf
 import keras.backend as K
 
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
 
+
+def ltas_lasso_interpreter(model):
+
+
+    lasso = joblib.load(model)
+    M = len(lasso.coef_)
+    idx = np.arange(len(lasso.coef_))
+    print(idx[abs(lasso.coef_) > 0])
+
+    duration = 1000
+    heatmap = np.zeros((1000,M))
+
+    mean_feat = lasso.coef_[:257]
+    std_feat = lasso.coef_[257:]
+    heatmap = np.tile(mean_feat,(1000,1)).T
+    heatmap_2 = np.tile(std_feat,(1000,1)).T
+    y = np.linspace(0, 8000, 257)
+
+    font = {'size': 22}
+
+    matplotlib.rc('font', **font)
+
+    fig = plt.figure(num=None, figsize=(15, 12), dpi=80, facecolor='w', edgecolor='k')
+    plt.plot(y,mean_feat,linewidth=4)
+    plt.plot(y,std_feat,linewidth=4)
+    plt.ylabel("coefficient for frequency bin",fontsize=32)
+    plt.xlabel("frequency (Hz)",fontsize=32)
+    plt.legend(["mean LTAS features","std LTAS features"],fontsize=32)
+    #fancy_spectrogram(heatmap_2,"control",cmap="gray")
+    #plt.colorbar()
+    plt.tight_layout()
+    plt.savefig("figures/ltas_sparsity.pdf",padlen=0.005)
+
+    #plt.show()
 def confusion_dnn(calculate):
     if calculate:
         config = tf.ConfigProto(allow_soft_placement=True,
@@ -105,8 +141,7 @@ def confusion_dnn(calculate):
             print(speaker, end="\t")
             print(results[1])
 def phonet_gmm_figure(model_cancer, model_control):
-    font = {'family': 'normal',
-            'size': 22}
+    font = {'size': 22}
 
     matplotlib.rc('font', **font)
 
@@ -140,7 +175,7 @@ def phonet_gmm_figure(model_cancer, model_control):
 
     #plt.xlim([-1, 1])
     plt.xticks(rotation=50)
-    plt.ylabel("mean difference of GMM bins")
+    plt.xlabel("mean difference of GMM bins")
     plt.legend(["more cancer like","more control like"])
     leg = ax.get_legend()
     leg.legendHandles[0].set_color('red')
@@ -149,8 +184,7 @@ def phonet_gmm_figure(model_cancer, model_control):
     plt.savefig("figures/ppg_gmm_barplot.png")
 
 def asr_gmm_figure(model_cancer, model_control):
-    font = {'family': 'normal',
-            'size': 22}
+    font = {'size': 22}
 
     matplotlib.rc('font', **font)
 
@@ -195,13 +229,14 @@ def asr_gmm_figure(model_cancer, model_control):
 
     #plt.xlim([-1, 1])
     plt.xticks(rotation=50)
-    plt.ylabel("mean difference of GMM bins")
+    plt.xlabel("mean difference of GMM bins")
     plt.legend(["more cancer like","more control like"])
     leg = ax.get_legend()
     leg.legendHandles[0].set_color('red')
     leg.legendHandles[1].set_color('blue')
     #plt.show()
-    plt.savefig("figures/ppg_gmm_barplot_2.png")
+    plt.tight_layout()
+    plt.savefig("figures/ppg_gmm_barplot_2.pdf",padlen=0.005)
 
 def mean_gradcam(calculate=False):
 
@@ -275,16 +310,16 @@ def mean_gradcam(calculate=False):
 
                 healthy_grads = healthy_grads + cam
                 #stacked_grads[i,:] = np.ravel(cam
-                plt.imshow(np.transpose(cam[:1000,:,:],[1,0,2]),aspect="auto")
-                plt.show()
+                #plt.imshow(np.transpose(cam[:1000,:,:],[1,0,2]),aspect="auto")
+                #plt.show()
                 num_healthy = num_healthy + 1
             else:
                 cam = visualize_cam(resnet.trainer, layer_idx, filter_indices=1,
                                   seed_input=output)
 
                 cancer_grads = cancer_grads + cam
-                plt.imshow(cam)
-                plt.show()
+                #plt.imshow(cam)
+                #plt.show()
                 #stacked_grads[i,:] = np.ravel(cam)
 
                 num_cancer = num_cancer + 1
@@ -307,26 +342,31 @@ def mean_gradcam(calculate=False):
 
     print(healthy_grads.shape)
 
+    fig = plt.figure(num=None, figsize=(15, 10), dpi=100, facecolor='w', edgecolor='k')
+    font = {'size': 26}
+    matplotlib.rc('font', **font)
+
 
     plt.subplot(2,1,1)
     
-    fancy_spectrogram(np.mean(healthy_grads[:1000,:,:],axis=2).T,"control")
+    fancy_spectrogram(np.mean(healthy_grads[:1000,:,:],axis=2).T,"healthy speech")
     plt.subplot(2,1,2)
-    fancy_spectrogram(np.mean(cancer_grads[:1000,:,:],axis=2).T,"cancer")
-
+    fancy_spectrogram(np.mean(cancer_grads[:1000,:,:],axis=2).T,"oral cancer speech")
+    #plt.margins(-0.4,-0.3)
     #plt.imshow(np.mean(cancer_grads[:1000,:,:],axis=2),cmap="jet")
-    plt.savefig("figures/mean_activation_maps.png")
+    plt.tight_layout()
+    plt.savefig("figures/mean_activation_maps.pdf",pad_len=0.005)
     #plt.show()
 
-def fancy_spectrogram(spectrogram,title):
+def fancy_spectrogram(spectrogram,title,cmap="jet"):
 
     # Flip upside down
-    plt.imshow(np.flipud(spectrogram), cmap="jet")
+    plt.imshow(np.flipud(spectrogram),cmap)
 
     # Labels
     plt.ylabel("Hz")
     plt.xlabel("frames")
-    plt.title(title)
+    plt.title(title,fontsize=30 )
 
     y = np.linspace(8000, 0, 257)
     # the grid to which your data corresponds
@@ -341,7 +381,7 @@ def fancy_spectrogram(spectrogram,title):
     # Calculate sum and normalise
     sum_val = np.sum(spectrogram, axis=1)
     sum_val = sum_val / np.max(sum_val) * 100
-    plt.plot(sum_val, np.arange(257)[::-1], "r--")
+    #plt.plot(sum_val, np.arange(257)[::-1], "r--")
 
 
 
@@ -349,5 +389,5 @@ if __name__ == '__main__':
     #confusion_dnn(calculate=True)
     asr_gmm_figure("gmm_checkpoints/gmm_ppg_30sec_16_components_cancer.pkl",
                       "gmm_checkpoints/gmm_ppg_30sec_16_components_healthy.pkl")
-    #mean_gradcam(calculate=True)
-
+    mean_gradcam(calculate=False)
+    ltas_lasso_interpreter("svm_checkpoints/ard_ltas_0.01_components.pkl")

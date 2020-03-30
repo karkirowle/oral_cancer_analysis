@@ -87,6 +87,25 @@ def resnet_classifier():
     else:
         resnet.trainer.load_weights("checkpoints/" + experiment + ".hd5")
 
+    results = resnet.trainer.evaluate_generator(train_loader)
+    print(results[1],end="\t")
+
+    train_loader = LogspecLoader(train_acoustic,train_label, shuffle, batch_size=1)
+    healthy_scores = []
+    cancer_scores = []
+    for i in range(len(val_loader)):
+        x,label = train_loader[i]
+        score = resnet.trainer.predict(x)
+        if label[0,0] == 0:
+            cancer_scores.append(score[0,0])
+        else:
+            healthy_scores.append(score[0,0])
+
+    eer, _ = compute_eer(np.array(healthy_scores), np.array(cancer_scores))
+    print(eer,end="\t")
+
+
+
 
     results = resnet.trainer.evaluate_generator(val_loader)
     print(results[1],end="\t")

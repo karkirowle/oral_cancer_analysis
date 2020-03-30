@@ -8,9 +8,19 @@ from tqdm import tqdm
 import joblib
 import os
 
+from accuracy import calculate_acc_and_eer
 from tDCF_python_v1.eval_metrics import compute_eer
 
 np.random.seed(0)
+
+
+class GMM_Wrapper:
+    def __init__(self,gmm_healthy,gmm_cancer):
+        self.gmm_healthy = gmm_healthy
+        self.gmm_cancer = gmm_cancer
+
+    def predict(self, x):
+        return self.gmm_cancer.score(x) - self.gmm_healthy.score(x)
 
 def gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,ltas,delta_delta):
 
@@ -83,36 +93,11 @@ def gmm_kaldi_frontend(experiment,train,train_scp_file,test_scp_file,gmm_comps,l
     test_cancer_acoustic = FileSourceDataset(test_cancer_acoustic_source)
     test_healthy_acoustic = FileSourceDataset(test_healthy_acoustic_source)
 
-    all_prediction = len(test_cancer_acoustic) + len(test_healthy_acoustic)
-    right = 0
-
-    cancer_scores = []
-    healthy_scores = []
-    for idx in tqdm(range(len(test_cancer_acoustic))):
-        x = test_cancer_acoustic[idx].T
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        cancer_scores.append(score)
-        right += score < 0
-    for idx in tqdm(range(len(test_healthy_acoustic))):
-        x = test_healthy_acoustic[idx].T
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        healthy_scores.append(score)
-        right += score > 0
-
-    accuracy = right / all_prediction
-    print(accuracy,end="\t")
-
-    eer, _ = compute_eer(np.array(healthy_scores), np.array(cancer_scores))
-    print(eer)
-
-    import matplotlib.pyplot as plt
-
-    # bins = 100
-    # plt.subplot(1, 2, 1)
-    # plt.hist(healthy_scores, bins)
-    # plt.subplot(1, 2, 2)
-    # plt.hist(cancer_scores, bins)
-    #plt.show()
+    model = GMM_Wrapper(gmm_healthy, gmm_cancer)
+    calculate_acc_and_eer(train_cancer_acoustic, train_healthy_acoustic, model, False, 0)
+    print("",end="\t")
+    calculate_acc_and_eer(test_cancer_acoustic, test_healthy_acoustic, model, False, 0)
+    print("")
 
 
 def gmm_ppg_script(experiment,gmm_comps,train,no_pause):
@@ -180,45 +165,11 @@ def gmm_ppg_script(experiment,gmm_comps,train,no_pause):
     healthy_test_source = NPYDataSource2(DATA_ROOT, subset="healthy",transpose=True)
     healthy_test = FileSourceDataset(healthy_test_source)
 
-    all_prediction = len(cancer_test) + len(healthy_test)
-    right = 0
-
-    cancer_scores = []
-    healthy_scores = []
-    for idx in tqdm(range(len(cancer_test))):
-        x = cancer_test[idx]
-        if no_pause:
-            x = x[:-1].T
-
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        cancer_scores.append(score)
-        #if score > 0:
-            #print(cancer_test.collected_files[idx])
-        right += score < 0
-    for idx in tqdm(range(len(healthy_test))):
-        x = healthy_test[idx]
-        if no_pause:
-            x = x[:-1].T
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        healthy_scores.append(score)
-        #if score < 0:
-            #print(healthy_test.collected_files[idx])
-        right += score > 0
-
-    accuracy = right / all_prediction
-    print(accuracy,end="\t")
-
-    eer, _ = compute_eer(np.array(healthy_scores), np.array(cancer_scores))
-    print(eer)
-
-    import matplotlib.pyplot as plt
-
-    # bins = 100
-    # plt.subplot(1, 2, 1)
-    # plt.hist(healthy_scores, bins)
-    # plt.subplot(1, 2, 2)
-    # plt.hist(cancer_scores, bins)
-    # plt.show()
+    model = GMM_Wrapper(gmm_healthy,gmm_cancer)
+    calculate_acc_and_eer(cancer_train, healthy_train, model, no_pause, 0)
+    print("",end="\t")
+    calculate_acc_and_eer(cancer_test, healthy_test, model, no_pause, 0)
+    print("")
 
 def gmm_mfcc_script():
     DATA_ROOT = "/media/boomkin/HD-B2/datasets/oral_cancer_speaker_partitioned/wav/"
@@ -266,39 +217,11 @@ def gmm_mfcc_script():
     healthy_test = FileSourceDataset(healthy_test_source)
 
 
-    all_prediction = len(cancer_test) + len(healthy_test)
-    right = 0
-
-    cancer_scores = []
-    healthy_scores = []
-    for idx in tqdm(range(len(cancer_test))):
-        x = cancer_test[idx].T
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        cancer_scores.append(score)
-
-        if score > 0:
-            print(cancer_test.collected_files[idx])
-        right += score < 0
-    for idx in tqdm(range(len(healthy_test))):
-        x = healthy_test[idx].T
-        score = np.mean(gmm_healthy.score(x) - gmm_cancer.score(x))
-        healthy_scores.append(score)
-
-        if score < 0:
-            print(healthy_test.collected_files[idx])
-        right += score > 0
-
-    accuracy = right / all_prediction
-    print(accuracy)
-
-    import matplotlib.pyplot as plt
-
-    bins=100
-    plt.subplot(1,2,1)
-    plt.hist(healthy_scores,bins)
-    plt.subplot(1,2,2)
-    plt.hist(cancer_scores,bins)
-    #plt.show()
+    model = GMM_Wrapper(gmm_healthy, gmm_cancer)
+    calculate_acc_and_eer(cancer_train, healthy_train, model, no_pause, 0)
+    print("",end="\t")
+    calculate_acc_and_eer(cancer_test, healthy_test, model, no_pause, 0)
+    print("")
 
 if __name__ == '__main__':
 

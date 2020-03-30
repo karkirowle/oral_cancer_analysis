@@ -23,11 +23,12 @@ class KaldiSource(FileDataSource):
     """
     Generic nnnkwii source class for Kaldi frontend
     """
-    def __init__(self,scp_file,subset,delta_delta=False,transpose=True,max_files=None):
+    def __init__(self,scp_file,subset,delta_delta=False,transpose=True,normalise=False,max_files=None):
         self.max_files = max_files
         self.scp_file = scp_file
         self.subset = subset
         self.transpose = transpose
+        self.normalise = normalise
         self.key_list = ako.read_all_key(scp_file)
         self.delta_delta = delta_delta
         self.alpha = None
@@ -70,6 +71,10 @@ class KaldiSource(FileDataSource):
 
             X = np.vstack((X,delta,delta_delta))
 
+        if self.normalise:
+            mu = np.mean(X)
+            std = np.std(X)
+            X = (X-mu)/std
         #print(X.shape)
         return X.astype(np.float32)
 
