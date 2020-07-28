@@ -78,6 +78,7 @@ class KaldiSource(FileDataSource):
         #print(X.shape)
         return X.astype(np.float32)
 
+
 class HTKSource(FileDataSource):
     """
     Generic HTK file front end for nnmnkwii

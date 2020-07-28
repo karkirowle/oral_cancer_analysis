@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-from preprocessing import FileSourceDataset, LibrosaSpectrogramSource, LogspecLoader, LabelDataSource, KaldiSource, KaldiLabelDataSource
+from preprocessing import FileSourceDataset, LogspecLoader, KaldiSource, KaldiLabelDataSource
 from nnmnkwii.datasets import PaddedFileSourceDataset
 from vis.visualization import visualize_cam
 from vis.utils import utils
@@ -41,20 +41,24 @@ def ltas_lasso_interpreter(model):
     heatmap_2 = np.tile(std_feat,(1000,1)).T
     y = np.linspace(0, 8000, 257)
 
-    font = {'size': 22}
+    #font = {'size': 22}
 
-    matplotlib.rc('font', **font)
-
-    fig = plt.figure(num=None, figsize=(15, 12), dpi=80, facecolor='w', edgecolor='k')
-    plt.plot(y,mean_feat,linewidth=4)
-    plt.plot(y,std_feat,linewidth=4)
-    plt.ylabel("coefficient for frequency bin",fontsize=32)
-    plt.xlabel("frequency (Hz)",fontsize=32)
-    plt.legend(["mean LTAS features","std LTAS features"],fontsize=32)
+    #matplotlib.rc('font', **font)
+    fig_fontsize = 7
+    fig_linewidth = 1
+    fig = plt.figure(num=None, figsize=(3.14, 3.14*0.50), dpi=100, facecolor='w', edgecolor='k')
+    plt.plot(y,mean_feat,linewidth=1)
+    plt.plot(y,std_feat,linewidth=1)
+    plt.ylabel("coefficient for frequency bin",fontsize=fig_fontsize) # 32
+    plt.xlabel("frequency (Hz)",fontsize=fig_fontsize) # 32
+    plt.legend(["mean LTAS features","std LTAS features"],fontsize=8)
     #fancy_spectrogram(heatmap_2,"control",cmap="gray")
     #plt.colorbar()
-    plt.tight_layout()
-    plt.savefig("figures/ltas_sparsity.pdf",padlen=0.005)
+    #plt.subplots_adjust(left=0, bottom=0, right=0, top=0, wspace=0, hspace=0)
+    plt.tight_layout(pad=0)
+    fig.tight_layout(pad=0)
+    #fig.set_size_inches(3.14, 3.14*0.62)
+    fig.savefig("figures/ltas_sparsity.pdf",pad_len=0.005)
 
     #plt.show()
 def confusion_dnn(calculate):
@@ -140,6 +144,7 @@ def confusion_dnn(calculate):
             results = resnet.trainer.evaluate_generator(val_gen)
             print(speaker, end="\t")
             print(results[1])
+
 def phonet_gmm_figure(model_cancer, model_control):
     font = {'size': 22}
 
@@ -173,33 +178,28 @@ def phonet_gmm_figure(model_cancer, model_control):
     ax.text(0.002, -0.2, "/p/, /b/, /t/, /k/, /g/, /tS/, /d/", fontsize=22)
     ax.text(-0.018, 15.8, "/m/, /n/", fontsize=22)
 
-    #plt.xlim([-1, 1])
     plt.xticks(rotation=50)
-    plt.xlabel("mean difference of GMM bins")
-    plt.legend(["more cancer like","more control like"])
+    plt.xlabel("mean difference of GMM bins",fontsize=32)
+    plt.legend(["more cancer like","more control like"],fontsize=40)
     leg = ax.get_legend()
     leg.legendHandles[0].set_color('red')
     leg.legendHandles[1].set_color('blue')
-    #plt.show()
     plt.savefig("figures/ppg_gmm_barplot.png")
 
 def asr_gmm_figure(model_cancer, model_control):
-    font = {'size': 22}
 
-    matplotlib.rc('font', **font)
 
     cancer_gmm = joblib.load(model_cancer)
     control_gmm = joblib.load(model_control)
 
     meandiff = np.mean(cancer_gmm.means_.T - control_gmm.means_.T,axis=1)
-    #proxy = np.zeros_like(meandiff)
-    print(meandiff.shape)
-    print(meandiff)
 
-    fig = plt.figure(num=None, figsize=(15, 12), dpi=80, facecolor='w', edgecolor='k')
+
+    # 15,12
+    fig_fontsize = 7
+    fig = plt.figure(num=None, figsize=(3.14, 3.14*0.7), dpi=100, facecolor='w', edgecolor='k')
     ax = plt.subplot(111)
 
-    #cats = [str(i) for i in range(39)]
 
     cats = pd.read_csv("fac_via_ppg/test/data/phoneme_table", delimiter="\t", header=None, names=["a","b"])
     cats = cats["a"]
@@ -224,19 +224,18 @@ def asr_gmm_figure(model_cancer, model_control):
     ax.barh(cats, width=meandiff, height=1, color=list(color),linewidth=1,edgecolor="black")
     proxy = np.zeros_like(meandiff)
     ax.barh(cats,proxy)
-    #ax.text(0.002, -0.2, "/p/, /b/, /t/, /k/, /g/, /tS/, /d/", fontsize=22)
-    #ax.text(-0.018, 15.8, "/m/, /n/", fontsize=22)
 
-    #plt.xlim([-1, 1])
-    plt.xticks(rotation=50)
-    plt.xlabel("mean difference of GMM bins")
-    plt.legend(["more cancer like","more control like"])
+
+    plt.xlabel("mean difference of GMM bins",fontsize=fig_fontsize)
+    plt.legend(["more cancer like","more control like"],fontsize=fig_fontsize + 1)
     leg = ax.get_legend()
     leg.legendHandles[0].set_color('red')
     leg.legendHandles[1].set_color('blue')
-    #plt.show()
-    plt.tight_layout()
-    plt.savefig("figures/ppg_gmm_barplot_2.pdf",padlen=0.005)
+
+
+    fig.tight_layout(pad=0)
+    plt.savefig("figures/ppg_gmm_barplot_2.pdf",pad_len=0.005)
+
 
 def mean_gradcam(calculate=False):
 
@@ -271,15 +270,13 @@ def mean_gradcam(calculate=False):
 
         dim_1 = val_gen.dim_1
         dim_2 = val_gen.dim_2
-        print(dim_1)
-        print(dim_2)
+
         # TODO: last dimension should be 3?
         healthy_grads = np.zeros((dim_1,dim_2,3))
         cancer_grads = np.zeros((dim_1,dim_2,3))
 
         samples = 863
-        # TODO: where 3 is coming from
-        stacked_grads = np.zeros((samples,dim_1*dim_2*1))
+
         stacked_labels = np.zeros((samples,2),dtype=int)
 
         num_healthy = 0
@@ -309,24 +306,14 @@ def mean_gradcam(calculate=False):
                                   seed_input=output)
 
                 healthy_grads = healthy_grads + cam
-                #stacked_grads[i,:] = np.ravel(cam
-                #plt.imshow(np.transpose(cam[:1000,:,:],[1,0,2]),aspect="auto")
-                #plt.show()
                 num_healthy = num_healthy + 1
             else:
                 cam = visualize_cam(resnet.trainer, layer_idx, filter_indices=1,
                                   seed_input=output)
 
                 cancer_grads = cancer_grads + cam
-                #plt.imshow(cam)
-                #plt.show()
-                #stacked_grads[i,:] = np.ravel(cam)
 
                 num_cancer = num_cancer + 1
-
-        # Number of health/cancer patients
-        print(num_cancer)
-        print(num_healthy)
 
 
         # Calculation of mean activations on spectograms
@@ -340,7 +327,6 @@ def mean_gradcam(calculate=False):
     healthy_grads = np.load("healthy.npy")
     cancer_grads = np.load("cancer.npy")
 
-    print(healthy_grads.shape)
 
     fig = plt.figure(num=None, figsize=(15, 10), dpi=100, facecolor='w', edgecolor='k')
     font = {'size': 26}
@@ -349,14 +335,12 @@ def mean_gradcam(calculate=False):
 
     plt.subplot(2,1,1)
     
-    fancy_spectrogram(np.mean(healthy_grads[:1000,:,:],axis=2).T,"healthy speech")
+    fancy_spectrogram(np.mean(healthy_grads[:1000,:,:],axis=2).T,"healthys speech")
     plt.subplot(2,1,2)
     fancy_spectrogram(np.mean(cancer_grads[:1000,:,:],axis=2).T,"oral cancer speech")
-    #plt.margins(-0.4,-0.3)
-    #plt.imshow(np.mean(cancer_grads[:1000,:,:],axis=2),cmap="jet")
+
     plt.tight_layout()
-    plt.savefig("figures/mean_activation_maps.pdf",pad_len=0.005)
-    #plt.show()
+    plt.savefig("figures/mean_activation_maps.pdf",bbox_inches='tight',pad_len=0.005)
 
 def fancy_spectrogram(spectrogram,title,cmap="jet"):
 
@@ -365,7 +349,7 @@ def fancy_spectrogram(spectrogram,title,cmap="jet"):
 
     # Labels
     plt.ylabel("Hz")
-    plt.xlabel("frames")
+    plt.xlabel("frames",fontsize=32)
     plt.title(title,fontsize=30 )
 
     y = np.linspace(8000, 0, 257)
@@ -376,18 +360,21 @@ def fancy_spectrogram(spectrogram,title,cmap="jet"):
     y_positions = np.arange(0, ny, step_y)  # pixel count at label position
     y_labels = y[::step_y]  # labels you want to see
     plt.yticks(y_positions, y_labels)
-    #plt.colorbar()
 
     # Calculate sum and normalise
     sum_val = np.sum(spectrogram, axis=1)
-    sum_val = sum_val / np.max(sum_val) * 100
-    #plt.plot(sum_val, np.arange(257)[::-1], "r--")
 
 
 
 if __name__ == '__main__':
     #confusion_dnn(calculate=True)
+
+    # This produces the ppg_gmm_barplot_2.pdf
     asr_gmm_figure("gmm_checkpoints/gmm_ppg_30sec_16_components_cancer.pkl",
                       "gmm_checkpoints/gmm_ppg_30sec_16_components_healthy.pkl")
+
     mean_gradcam(calculate=False)
+
+
+    # This produces the ltas_sparsity.pdf
     ltas_lasso_interpreter("svm_checkpoints/ard_ltas_0.01_components.pkl")
