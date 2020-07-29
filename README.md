@@ -7,7 +7,7 @@ This git repository contains the training and analysis code used in our paper.
 The training script for the neural network is not included.
 
 ### Paper 
-The paper is accepted to Interspeech 2020. The arXiV preprint can be found here: [Here](https://arxiv.org/abs/2007.14205)
+The paper is accepted to Interspeech 2020. The arXiV preprint can be found [here](https://arxiv.org/abs/2007.14205)
 
 ### Installation
 The extracted features and the raw dataset can be downloaded from [this](
