@@ -39,7 +39,7 @@ opt-einsum==3.1.0
 pandas==0.22.0
 -e git+https://github.com/jcvasquezc/phonet@d560ce29b740de81e5fe3c2d64ee84c232ff1762#egg=phonet
 Pillow==7.0.0
-protobuf==3.11.3
+protobuf==3.18.3
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 pycparser==2.19
